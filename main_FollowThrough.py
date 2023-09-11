@@ -9,6 +9,10 @@ from jsonAPIcall import get_json_data
 
 import pandas as pd
 import datetime
+import os
+MY_API_KEY = os.environ.get('FIN_MOD_PREP_API_KEY') #Calling the api key from environment variable
+
+#print(MY_API_KEY)
 
 # Load the DataFrame with price and volume data for the S&P500 index
 
@@ -24,7 +28,8 @@ indexSym= '^GSPC' # S&P500
 # '^NSEI' #NIFTY 50
 #'^NDX' #NASDAQ 100
 
-url= "https://financialmodelingprep.com/api/v3/historical-price-full/index/{indexSym}?from={dateFrom}&to={dateTo}&apikey={my_api_key}".format(indexSym=indexSym, dateFrom= dateFrom, dateTo=dateTo, my_api_key=creds.my_api_key) 
+url= f"https://financialmodelingprep.com/api/v3/historical-price-full/index/{indexSym}?from={dateFrom}&to={dateTo}&apikey={MY_API_KEY}"
+
 df= pd.DataFrame(get_json_data(url)['historical'])
 df= df[::-1] # reversing order of dataframe to make first entry be the dateFrom
 
@@ -76,9 +81,48 @@ for i in range(len(df)):
             for j in range(i+2, i+10):  # Loop through the next 3-10 days
                 if is_follow_through(df, j):  # Check if one of the bear market rally days is a follow through day
                     df.loc[j, 'followThrough'] = True
-                    print(j)
+                    #print(j)
                 
         
 
 #export the data for import into PowerBI
-df.to_excel('S&PHistoricalWithBear.xlsx',index= False)
+#df.to_excel('S&PHistoricalWithBear.xlsx',index= False)
+
+df['bearClose'] = df.apply(lambda row: row['close'] if row['bear_market'] else None, axis=1) #closing prices during bear markets
+df['bearRallyClose'] = df.apply(lambda row: row['close'] if row['rally'] else None, axis=1) #closing prices during bear markets
+df['followThroughClose'] = df.apply(lambda row: row['close'] if row['followThrough'] else None, axis=1) #closing prices during bear markets
+
+# Plotly code for Visualization----------------------------------------------------------------------
+
+import plotly.express as px
+import plotly.graph_objects as go
+
+
+# Create a Figure
+fig = go.Figure()
+
+# Add traces for each column
+fig.add_trace(go.Scatter(x=df['date'], y=df['close'], mode='lines+markers', name='Close', line=dict(color='blue')))
+fig.add_trace(go.Scatter(x=df['date'], y=df['bearClose'], mode='lines+markers', name='Bear Close', line=dict(color='red')))
+fig.add_trace(go.Scatter(x=df['date'], y=df['bearRallyClose'], mode='lines+markers', name='Bear Rally Close', marker_symbol='diamond',line=dict(color='black')))
+fig.add_trace(go.Scatter(x=df['date'], y=df['followThroughClose'], mode='lines+markers', name='Follow Through Close', marker_symbol='cross', line=dict(color='black')))
+
+# Update layout with range slider and selectors
+fig.update_xaxes(
+    rangeslider_visible=True,
+    rangeselector=dict(
+        buttons=list([
+            dict(count=1, label="1m", step="month", stepmode="backward"),
+            dict(count=6, label="6m", step="month", stepmode="backward"),
+            dict(count=1, label="YTD", step="year", stepmode="todate"),
+            dict(count=1, label="1y", step="year", stepmode="backward"),
+            dict(step="all")
+        ])
+    )
+)
+
+# Set the title
+fig.update_layout(title='Time Series with Range Slider and Selectors')
+
+# Show the figure
+fig.show()
