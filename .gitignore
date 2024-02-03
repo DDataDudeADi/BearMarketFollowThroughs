@@ -1,2 +1,5 @@
 #ignore the file containing API credentials
 creds.py
+# Python bytecode
+__pycache__/
+*.pyc
